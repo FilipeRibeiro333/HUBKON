@@ -1,0 +1,15 @@
+node_modules/
+.env
+dist/
+build/
+.next/
+desktop.ini
+Thumbs.db
+
+*.jpg
+*.jpeg
+*.png
+*.mp3
+*.mp4
+*.wav
+*.log
