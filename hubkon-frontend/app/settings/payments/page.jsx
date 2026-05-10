@@ -1,176 +1,147 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Shield, Zap, TrendingUp, Lock } from 'lucide-react';
-import api from '@/services/api'; // Ajuste o caminho conforme seu arquivo de API
+import { Shield, TrendingUp, Lock, CheckCircle2, RefreshCw } from 'lucide-react';
+import useAuth from "../../Hook/useAuth";
+import api from '@/services/api';
 
 export default function PaymentSettingsPage() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [plan, setPlan] = useState('basic');
-  
-  // Estados vinculados ao seu settingsService.js
-  const [settings, setSettings] = useState({
-    escrow_fee_percent: 2.0,
-    penalty_percent: 5.0,
-    staking_bonus_percent: 12.0
-  });
+  const [fetching, setFetching] = useState(true);
+  const [dynamicPlans, setDynamicPlans] = useState(null);
 
-  // 1. Atualiza as taxas globais (Chama o settingsService no Backend)
-  const handleUpdateProtocol = async () => {
+  const currentPlan = user?.plan || "basic";
+
+  // 1. BUSCA OS PREÇOS DEFINIDOS PELA GOVERNANÇA MACRO
+  useEffect(() => {
+    const loadMarketRates = async () => {
+      try {
+        const res = await api.get("/admin/settings");
+        if (res.data?.success) {
+          const rules = res.data.settings.find(s => s.key === 'escrow_rules')?.value;
+          if (rules) {
+            setDynamicPlans({
+              basic: { 
+                price: "Free", 
+                limit: "1k USD", 
+                desc: "Core Sovereign Engine" 
+              },
+              pro: { 
+                price: `$${rules.pro_price || 29}/mo`, 
+                limit: `${(rules.pro_limit / 1000).toFixed(0)}k USD`, 
+                desc: "KPI Analytics & Governance" 
+              },
+              enterprise: { 
+                price: rules.ent_price > 0 ? `$${rules.ent_price}/mo` : "Custom", 
+                limit: rules.ent_limit >= 1000000 ? "Unlimited" : `${(rules.ent_limit / 1000).toFixed(0)}k USD`, 
+                desc: "Full Blockchain Access" 
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao sincronizar tabelas de preço.");
+      } finally {
+        setFetching(false);
+      }
+    };
+    loadMarketRates();
+  }, []);
+
+  const handleUpgrade = async (newPlan) => {
+    if (!confirm(`Confirmar upgrade institucional para o plano ${newPlan.toUpperCase()}?`)) return;
     setLoading(true);
     try {
-      // Itera sobre as chaves permitidas no seu service
-      const keys = Object.keys(settings);
-      
-      await Promise.all(keys.map(key => 
-        api.post('/settings', { key, value: Number(settings[key]) })
-      ));
-
-      console.log("LOG: [GOVERNANCE_UPDATE] Parameters anchored to database.");
-      alert("Protocolo HUBKON atualizado na rede com sucesso!");
+      const res = await api.post("/subscription/renew", { newPlan });
+      if (res.data.success) {
+        alert("UPGRADE_EXECUTADO: Sincronizando novas permissões de rede.");
+        window.location.reload();
+      }
     } catch (err) {
-      console.error("CRITICAL_ERROR:", err);
-      alert("Erro ao atualizar protocolo.");
+      alert("ERRO_SUBSCRICAO: Falha na transição de Tier.");
     } finally {
       setLoading(false);
     }
   };
 
-  // 2. Realiza o Upgrade de Plano (Chama o subscriptionService no Backend)
-  const handleUpgrade = async (newPlan) => {
-    if (!confirm(`Confirmar upgrade para o nível ${newPlan.toUpperCase()}?`)) return;
-
-    try {
-      // Assume que o ID da empresa está no token/user logado ou via contexto
-      const response = await api.post('/subscription/renew', { newPlan });
-      
-      if (response.data.success) {
-        setPlan(newPlan);
-        alert(`Sistema escalado para ${newPlan.toUpperCase()}!`);
-      }
-    } catch (err) {
-      console.error("PROVISIONING_ERROR:", err);
-      alert("Falha na transição de plano.");
-    }
-  };
+  if (fetching) return (
+    <div className="flex h-screen items-center justify-center bg-[#080c14] text-purple-500 font-mono italic animate-pulse">
+      CONSULTANDO TARIFÁRIO DA REDE...
+    </div>
+  );
 
   return (
-    <div className="flex-1 bg-[#080c14] p-8 font-mono overflow-y-auto">
+    <div className="flex-1 bg-[#080c14] p-10 font-mono min-h-screen ml-64 text-white transition-all">
       {/* HEADER */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-black text-white italic tracking-tighter flex items-center gap-2">
-          <Settings className="text-emerald-500" size={24} />
-          PAYMENT_GOVERNANCE_v1.0
+      <div className="mb-10 border-l-4 border-purple-500 pl-4">
+        <h1 className="text-2xl font-black italic tracking-tighter flex items-center gap-2 uppercase">
+          <Shield className="text-purple-500" size={24} /> 
+          Subscrições de Rede
         </h1>
-        <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-[0.3em]">
-          Hubkon Protocol // Treasury & Economic Parameters
+        <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest">
+          Ambiente de Gestão de Tenant // Hubkon B2B
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* COLUNA ESQUERDA: GOVERNANÇA ECONÔMICA */}
-        <div className="lg:col-span-7 space-y-6">
-          <div className="bg-[#0c121d] border border-slate-800 p-6 rounded-sm relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
-            
-            <h2 className="text-sm font-bold text-slate-400 mb-6 flex items-center gap-2 uppercase">
-              <Zap size={16} className="text-emerald-500" /> 
-              Economic Levers
-            </h2>
+      <div className="max-w-3xl space-y-4">
+        {dynamicPlans && Object.keys(dynamicPlans).map((tier) => (
+          <div 
+            key={tier} 
+            className={`relative p-6 border transition-all duration-300 rounded-sm bg-[#0c121d] ${
+              currentPlan === tier 
+                ? 'border-purple-500 bg-purple-900/5 shadow-[0_0_20px_rgba(168,85,247,0.1)]' 
+                : 'border-slate-800 hover:border-slate-700'
+            }`}
+          >
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-6">
+                <div className={`w-12 h-12 flex items-center justify-center border rounded ${
+                  currentPlan === tier ? 'bg-purple-500/20 border-purple-500' : 'bg-black/40 border-slate-800 text-slate-600'
+                }`}>
+                  {tier === 'enterprise' ? <Lock size={20} /> : <TrendingUp size={20} />}
+                </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-4">
                 <div>
-                  <label className="text-[10px] text-slate-500 block mb-1 uppercase">Escrow Fee (%)</label>
-                  <input 
-                    type="number"
-                    value={settings.escrow_fee_percent}
-                    onChange={(e) => setSettings({...settings, escrow_fee_percent: e.target.value})}
-                    className="w-full bg-[#080c14] border border-slate-800 p-3 text-emerald-400 focus:outline-none focus:border-emerald-500 text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="text-[10px] text-slate-500 block mb-1 uppercase">Penalty Rate (%)</label>
-                  <input 
-                    type="number"
-                    value={settings.penalty_percent}
-                    onChange={(e) => setSettings({...settings, penalty_percent: e.target.value})}
-                    className="w-full bg-[#080c14] border border-slate-800 p-3 text-emerald-400 focus:outline-none focus:border-emerald-500 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="bg-[#080c14]/50 border border-slate-800/50 p-4 flex flex-col justify-center">
-                <div className="text-[10px] text-slate-600 mb-2 italic">PROTOCOL_PREVIEW</div>
-                <div className="text-xs text-slate-400 leading-relaxed">
-                  Taxa de Escrow: <span className="text-emerald-500">{settings.escrow_fee_percent}%</span><br/>
-                  Penalidade Disputa: <span className="text-red-500">{settings.penalty_percent}%</span>
-                </div>
-              </div>
-            </div>
-
-            <button 
-              disabled={loading}
-              onClick={handleUpdateProtocol}
-              className="mt-8 w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-black font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50"
-            >
-              {loading ? 'Processing...' : 'Commit Changes to Ledger'}
-            </button>
-          </div>
-        </div>
-
-        {/* COLUNA DIREITA: PLANOS E ACESSO */}
-        <div className="lg:col-span-5">
-          <div className="bg-[#0c121d] border border-slate-800 p-6 rounded-sm relative">
-            <h2 className="text-sm font-bold text-slate-400 mb-6 flex items-center gap-2 uppercase">
-              <Shield size={16} className="text-purple-500" /> 
-              Tier Authorization
-            </h2>
-
-            <div className="mb-6">
-              <div className="text-[9px] text-slate-500 uppercase mb-1">Status Ativo</div>
-              <div className="px-3 py-1 inline-block rounded-full text-[10px] font-black uppercase bg-purple-900/30 text-purple-400 border border-purple-500/30">
-                {plan}
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {['pro', 'enterprise'].map((tier) => (
-                <div key={tier} className={`flex items-center justify-between p-3 border border-slate-800 transition-all ${plan === tier ? 'bg-purple-900/10 border-purple-500/30' : 'hover:border-slate-700'}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded bg-slate-800 flex items-center justify-center">
-                      {tier === 'enterprise' ? <Lock size={14} className="text-slate-500" /> : <TrendingUp size={14} className="text-slate-500" />}
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-300 uppercase">{tier}</div>
-                      <div className="text-[9px] text-slate-600">
-                        {tier === 'enterprise' ? 'Blockchain Sealing' : 'KPI Analytics'}
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-black uppercase tracking-tighter">Plan_{tier}</h2>
+                    {currentPlan === tier && (
+                      <span className="text-[8px] bg-purple-500 text-black px-2 py-0.5 font-black uppercase rounded-full animate-pulse">Active</span>
+                    )}
                   </div>
-                  {plan !== tier && (
-                    <button 
-                      onClick={() => handleUpgrade(tier)}
-                      className="text-[9px] font-bold text-emerald-500 hover:underline"
-                    >
-                      UPGRADE_PATH
-                    </button>
-                  )}
+                  <p className="text-[10px] text-slate-500 uppercase mt-1 italic">{dynamicPlans[tier].desc}</p>
                 </div>
-              ))}
-            </div>
+              </div>
 
-            <div className="mt-6 pt-6 border-t border-slate-800/50">
-              <div className="flex justify-between items-center text-[10px]">
-                <span className="text-slate-500 uppercase">Staking Yield:</span>
-                <span className="text-emerald-500 font-bold">+{settings.staking_bonus_percent}% APY</span>
+              <div className="text-right flex items-center gap-8">
+                <div className="hidden sm:block font-mono">
+                  <p className="text-[9px] text-slate-600 uppercase font-bold tracking-widest">Pricing / Limit</p>
+                  <p className="text-xs font-bold text-white">
+                    {dynamicPlans[tier].price} — <span className="text-emerald-500">{dynamicPlans[tier].limit}</span>
+                  </p>
+                </div>
+
+                {currentPlan !== tier ? (
+                  <button 
+                    onClick={() => handleUpgrade(tier)} 
+                    disabled={loading}
+                    className="bg-white hover:bg-emerald-500 text-black px-6 py-2 text-[10px] font-black uppercase tracking-tighter transition-all disabled:opacity-30"
+                  >
+                    {loading ? <RefreshCw className="animate-spin" size={12}/> : 'Upgrade_Path'}
+                  </button>
+                ) : (
+                  <div className="text-purple-500 flex items-center gap-2 font-black text-[10px] uppercase">
+                    <CheckCircle2 size={16} /> Current
+                  </div>
+                )}
               </div>
             </div>
           </div>
-        </div>
+        ))}
+      </div>
 
+      <div className="mt-8 text-[9px] text-slate-600 font-mono uppercase tracking-[0.2em] max-w-2xl">
+        * Tarifário dinâmico regulado pelo protocolo central HUBKON.
       </div>
     </div>
   );

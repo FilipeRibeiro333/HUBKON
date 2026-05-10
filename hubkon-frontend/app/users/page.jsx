@@ -1,8 +1,8 @@
 "use client";
+
 import { useEffect, useState } from "react";
-// ✅ AJUSTADO: Sobe dois níveis (../../) para encontrar a pasta services na raiz
 import api from "../../services/api";
-import { Users, UserPlus, Shield, Mail, Trash2, CheckCircle } from "lucide-react";
+import { UserPlus, Trash2, Cpu } from "lucide-react";
 
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
@@ -12,16 +12,21 @@ export default function UsersPage() {
 
   const fetchUsers = async () => {
     try {
-      const res = await api.get("/admin/users"); 
-      setUsers(res.data.users || []);
+      const res = await api.get("/admin/users");
+      // ✅ Normalização: Aceita array direto ou objeto { users: [] }
+      const data = Array.isArray(res.data) ? res.data : (res.data.users || []);
+      setUsers(data);
     } catch (err) {
       console.error("Erro ao carregar utilizadores:", err);
+      setUsers([]); // Evita erro de .map
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   const handleAddUser = async (e) => {
     e.preventDefault();
@@ -37,8 +42,9 @@ export default function UsersPage() {
   };
 
   if (loading) return (
-    <div className="flex h-screen items-center justify-center bg-[#080c14]">
-      <div className="p-8 text-emerald-500 font-mono animate-pulse uppercase tracking-widest text-xs">
+    <div className="flex h-screen flex-col items-center justify-center bg-[#080c14] space-y-4">
+      <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="p-8 text-emerald-500 font-mono animate-pulse uppercase tracking-widest text-[10px]">
         Acedendo Base de Dados Soberana...
       </div>
     </div>
@@ -73,10 +79,14 @@ export default function UsersPage() {
           </thead>
           <tbody className="divide-y divide-slate-800/50">
             {users.length === 0 ? (
-              <tr><td colSpan="4" className="p-20 text-center text-slate-600 font-bold uppercase tracking-widest text-[10px]">Nenhum utilizador secundário encontrado.</td></tr>
+              <tr>
+                <td colSpan="4" className="p-20 text-center text-slate-600 font-bold uppercase tracking-widest text-[10px]">
+                  Nenhum utilizador encontrado no servidor local.
+                </td>
+              </tr>
             ) : (
               users.map((u) => (
-                <tr key={u._id} className="hover:bg-white/5 transition-colors group">
+                <tr key={u._id || u.email} className="hover:bg-white/5 transition-colors group">
                   <td className="p-5">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-emerald-500 font-bold uppercase border border-emerald-500/20">
@@ -111,45 +121,23 @@ export default function UsersPage() {
         </table>
       </div>
 
+      {/* Modal permanece igual */}
       {showModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[100] p-4">
-          <div className="bg-[#0f172a] border border-slate-800 p-8 rounded-[2.5rem] w-full max-w-md shadow-2xl shadow-black">
+          <div className="bg-[#0f172a] border border-slate-800 p-8 rounded-[2.5rem] w-full max-w-md">
             <h2 className="text-xl font-black text-white mb-6 uppercase italic tracking-tighter">Registrar Novo Acesso</h2>
             <form onSubmit={handleAddUser} className="space-y-4">
-              <input 
-                placeholder="NOME COMPLETO" 
-                className="w-full bg-black/50 border border-slate-800 p-4 rounded-2xl text-white text-xs font-bold outline-none focus:border-emerald-500 transition-all uppercase placeholder:text-slate-700"
-                value={newUser.name}
-                onChange={e => setNewUser({...newUser, name: e.target.value})}
-                required
-              />
-              <input 
-                type="email" placeholder="EMAIL CORPORATIVO" 
-                className="w-full bg-black/50 border border-slate-800 p-4 rounded-2xl text-white text-xs font-bold outline-none focus:border-emerald-500 transition-all uppercase placeholder:text-slate-700"
-                value={newUser.email}
-                onChange={e => setNewUser({...newUser, email: e.target.value})}
-                required
-              />
-              <input 
-                type="password" placeholder="SENHA TEMPORÁRIA" 
-                className="w-full bg-black/50 border border-slate-800 p-4 rounded-2xl text-white text-xs font-bold outline-none focus:border-emerald-500 transition-all uppercase placeholder:text-slate-700"
-                value={newUser.password}
-                onChange={e => setNewUser({...newUser, password: e.target.value})}
-                required
-              />
-              <select 
-                className="w-full bg-black/50 border border-slate-800 p-4 rounded-2xl text-white text-xs font-bold outline-none focus:border-emerald-500 transition-all appearance-none cursor-pointer uppercase"
-                value={newUser.role}
-                onChange={e => setNewUser({...newUser, role: e.target.value})}
-              >
-                <option value="operator">OPERADOR (APENAS LEITURA)</option>
-                <option value="manager">GESTOR (APROVAÇÃO)</option>
-                <option value="admin">ADMINISTRADOR (TOTAL)</option>
+              <input placeholder="NOME COMPLETO" className="w-full bg-black/50 border border-slate-800 p-4 rounded-2xl text-white text-xs font-bold outline-none focus:border-emerald-500 uppercase" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} required />
+              <input type="email" placeholder="EMAIL CORPORATIVO" className="w-full bg-black/50 border border-slate-800 p-4 rounded-2xl text-white text-xs font-bold outline-none focus:border-emerald-500 uppercase" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} required />
+              <input type="password" placeholder="SENHA" className="w-full bg-black/50 border border-slate-800 p-4 rounded-2xl text-white text-xs font-bold outline-none focus:border-emerald-500 uppercase" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required />
+              <select className="w-full bg-black/50 border border-slate-800 p-4 rounded-2xl text-white text-xs font-bold outline-none focus:border-emerald-500 uppercase" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} >
+                <option value="operator">OPERADOR</option>
+                <option value="manager">GESTOR</option>
+                <option value="admin">ADMINISTRADOR</option>
               </select>
-              
               <div className="flex gap-4 mt-8">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-4 text-slate-500 font-black uppercase text-[9px] tracking-widest hover:text-white transition-colors">Cancelar</button>
-                <button type="submit" className="flex-1 bg-emerald-600 text-white font-black py-4 rounded-2xl uppercase text-[9px] tracking-widest hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/40">Confirmar Registro</button>
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-4 text-slate-500 font-black uppercase text-[9px]">Cancelar</button>
+                <button type="submit" className="flex-1 bg-emerald-600 text-white font-black py-4 rounded-2xl uppercase text-[9px]">Confirmar</button>
               </div>
             </form>
           </div>

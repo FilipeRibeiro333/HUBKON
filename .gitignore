@@ -1,10 +1,14 @@
 node_modules/
 .env
+*.env
+
 dist/
 build/
 .next/
+
 desktop.ini
 Thumbs.db
+.DS_Store
 
 *.jpg
 *.jpeg
@@ -13,3 +17,7 @@ Thumbs.db
 *.mp4
 *.wav
 *.log
+
+coverage/
+.cache/
+.vscode/
